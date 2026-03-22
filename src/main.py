@@ -384,7 +384,7 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
 
 # --- Main Logic ---
 
-if __name__ == "__main__":
+def main():
     parser = argparse.ArgumentParser(description="Generate a visual summary contact sheet for video files.")
 
     parser.add_argument("target", nargs="?", help="A single video file or a directory to process (positional)")
@@ -442,3 +442,7 @@ if __name__ == "__main__":
             args.skip_at_start,
             args.jpg,
         )
+
+
+if __name__ == "__main__":
+    main()
