@@ -185,6 +185,7 @@ def extract_frame_at_time(video_path, time_s, target_width):
             return None
         if not stdout:
             return None
+
         from io import BytesIO
 
         pil_image = Image.open(BytesIO(stdout)).convert("RGB")
