@@ -167,42 +167,38 @@ def get_video_info(video_path):
         return None
 
 def extract_frame_at_time(video_path, time_s, target_width):
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        return None
-
-    num_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-    fps = cap.get(cv2.CAP_PROP_FPS)
-
-    if fps <= 0:
-        return None
-
-    frame_index = int(time_s * fps)
-
-    if frame_index >= num_frames:
-        frame_index = num_frames - 1
-
-    if not cap.set(cv2.CAP_PROP_POS_FRAMES, frame_index):
-        return None
-
-    ret, frame = cap.read()
-    cap.release()
-
-    if not ret:
-        return None
-
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    pil_image = Image.fromarray(frame_rgb)
-
-    w_percent = (target_width / float(pil_image.size[0]))
-    h_size = int((float(pil_image.size[1]) * float(w_percent)))
-
+    cmd = [
+        "ffmpeg",
+        "-v", "quiet",
+        "-ss", str(time_s),
+        "-i", video_path,
+        "-vframes", "1",
+        "-f", "image2pipe",
+        "-vcodec", "mjpeg",
+        "-"
+    ]
     try:
-        pil_image = pil_image.resize((target_width, h_size), Image.Resampling.LANCZOS)
-    except AttributeError:
-        pil_image = pil_image.resize((target_width, h_size), Image.ANTIALIAS)
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdout, stderr = process.communicate()
 
-    return pil_image
+        if process.returncode != 0:
+            return None
+        if not stdout:
+            return None
+        from io import BytesIO
+
+        pil_image = Image.open(BytesIO(stdout)).convert("RGB")
+        w_percent = target_width / float(pil_image.size[0])
+        h_size = int(float(pil_image.size[1]) * w_percent)
+
+        try:
+            pil_image = pil_image.resize((target_width, h_size), Image.Resampling.LANCZOS)
+        except AttributeError:
+            pil_image = pil_image.resize((target_width, h_size), Image.ANTIALIAS)
+        return pil_image
+
+    except Exception:
+        return None
 
 def draw_timestamp_on_image(image, text):
     draw = ImageDraw.Draw(image)
