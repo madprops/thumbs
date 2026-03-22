@@ -1,14 +1,3 @@
-# make a python script that emulates the function shown in the screenshots.
-# it will run in the current directory or a specified directory through
-# the --directory argument. it will accept other arguments to have
-# various relevant settings. what it does is it produces an image
-# with a summary of all the videos in that directory, with their
-# thumbnails, duration, and summary at the top, like in that
-# screenshots. saves that png image result in the current directory
-# or using the --output argument. the name is either based on --output
-# or on unix seconds date. add (2) (3) counters if the files repeat
-# instead of replacing them.
-
 import os
 import sys
 import argparse
@@ -38,7 +27,7 @@ GRID_BG_COLOR = (15, 15, 15)         # Almost black for the thumbnail grid backg
 TIMESTAMP_BG_COLOR = (0, 0, 0, 180)  # Darker semi-transparent black for timestamps
 TIMESTAMP_TEXT_COLOR = (255, 255, 255) # White
 
-VIDEO_EXTENSIONS = ('.mp4', '.avi', '.mkv', '.mov', '.flv', '.wmv', '.mpeg')
+VIDEO_EXTENSIONS = (".mp4", ".avi", ".mkv", ".mov", ".flv", ".wmv", ".mpeg", "webm")
 
 possible_fonts = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -48,6 +37,7 @@ possible_fonts = [
     "/System/Library/Fonts/Menlo.ttc",
     "/System/Library/Fonts/Helvetica.ttc",
 ]
+
 SELECTED_FONT_PATH = next((f for f in possible_fonts if os.path.exists(f)), None)
 
 # --- Helper Functions ---
@@ -72,11 +62,11 @@ def get_video_info(video_path):
         return None
 
     cmd = [
-        'ffprobe',
-        '-v', 'quiet',
-        '-print_format', 'json',
-        '-show_format',
-        '-show_streams',
+        "ffprobe",
+        "-v", "quiet",
+        "-print_format", "json",
+        "-show_format",
+        "-show_streams",
         video_path
     ]
 
@@ -91,11 +81,11 @@ def get_video_info(video_path):
         metadata = json.loads(stdout)
 
         # Duration calculation
-        duration_s = metadata.get('format', {}).get('duration')
+        duration_s = metadata.get("format", {}).get("duration")
         if not duration_s:
-            for stream in metadata.get('streams', []):
-                if stream.get('codec_type') == 'video' and 'duration' in stream:
-                    duration_s = stream['duration']
+            for stream in metadata.get("streams", []):
+                if stream.get("codec_type") == "video" and "duration" in stream:
+                    duration_s = stream["duration"]
                     break
 
         if not duration_s:
@@ -109,7 +99,7 @@ def get_video_info(video_path):
         duration_str = f"{hours:02}:{minutes:02}:{seconds:02}"
 
         # Size calculation
-        file_size_bytes = int(metadata.get('format', {}).get('size', 0))
+        file_size_bytes = int(metadata.get("format", {}).get("size", 0))
         file_size_mb = file_size_bytes / (1024 * 1024)
 
         if file_size_mb > 0:
@@ -118,11 +108,11 @@ def get_video_info(video_path):
             size_str = "N/A"
 
         # Stream specifics
-        v_stream = next((s for s in metadata.get('streams', []) if s.get('codec_type') == 'video'), {})
-        a_stream = next((s for s in metadata.get('streams', []) if s.get('codec_type') == 'audio'), {})
+        v_stream = next((s for s in metadata.get("streams", []) if s.get("codec_type") == "video"), {})
+        a_stream = next((s for s in metadata.get("streams", []) if s.get("codec_type") == "audio"), {})
 
-        width = v_stream.get('width', 0)
-        height = v_stream.get('height', 0)
+        width = v_stream.get("width", 0)
+        height = v_stream.get("height", 0)
 
         if width and height:
             resolution_str = f"{width}x{height}"
@@ -130,9 +120,11 @@ def get_video_info(video_path):
             resolution_str = "N/A"
 
         # FPS evaluation
-        fps_str = v_stream.get('r_frame_rate', '0/1')
-        if '/' in fps_str:
-            num, den = fps_str.split('/')
+        fps_str = v_stream.get("r_frame_rate", "0/1")
+
+        if "/" in fps_str:
+            num, den = fps_str.split("/")
+
             if int(den) != 0:
                 fps = round(int(num) / int(den), 3)
             else:
@@ -141,31 +133,33 @@ def get_video_info(video_path):
             fps = fps_str
 
         # Aspect Ratio
-        aspect_ratio = v_stream.get('display_aspect_ratio', 'N/A')
+        aspect_ratio = v_stream.get("display_aspect_ratio", "N/A")
+
         if aspect_ratio == "N/A" or aspect_ratio == "0:1":
+
             if width and height:
                 gcd = math.gcd(width, height)
                 aspect_ratio = f"{width//gcd}:{height//gcd}"
 
         # Audio formatting
-        a_rate = a_stream.get('sample_rate', 'N/A')
+        a_rate = a_stream.get("sample_rate", "N/A")
 
-        if a_rate != 'N/A':
+        if a_rate != "N/A":
             a_rate_str = f"{a_rate} Hz"
         else:
             a_rate_str = "N/A"
 
         return {
-            'filename': os.path.basename(video_path),
-            'duration_s': duration,
-            'length': duration_str,
-            'size': size_str,
-            'resolution': resolution_str,
-            'fps': str(fps),
-            'v_format': v_stream.get('codec_name', 'N/A'),
-            'a_format': a_stream.get('codec_name', 'N/A'),
-            'aspect_ratio': aspect_ratio,
-            'a_rate': a_rate_str
+            "filename": os.path.basename(video_path),
+            "duration_s": duration,
+            "length": duration_str,
+            "size": size_str,
+            "resolution": resolution_str,
+            "fps": str(fps),
+            "v_format": v_stream.get("codec_name", "N/A"),
+            "a_format": a_stream.get("codec_name", "N/A"),
+            "aspect_ratio": aspect_ratio,
+            "a_rate": a_rate_str
         }
 
     except Exception as e:
@@ -264,10 +258,10 @@ def draw_header(info, width):
     dummy_draw = ImageDraw.Draw(dummy_img)
 
     try:
-        title_bbox = dummy_draw.textbbox((0, 0), info['filename'], font=title_font)
+        title_bbox = dummy_draw.textbbox((0, 0), info["filename"], font=title_font)
         title_height = title_bbox[3] - title_bbox[1]
     except AttributeError:
-        _, title_height = dummy_draw.textsize(info['filename'], font=title_font)
+        _, title_height = dummy_draw.textsize(info["filename"], font=title_font)
 
     # Dynamic compact header height
     header_height = margin_top + title_height + title_bottom_margin + (3 * line_spacing) + bottom_margin
@@ -277,7 +271,7 @@ def draw_header(info, width):
     current_y = margin_top
 
     # Draw Title
-    draw.text((margin_left, current_y), info['filename'], font=title_font, fill=TEXT_COLOR)
+    draw.text((margin_left, current_y), info["filename"], font=title_font, fill=TEXT_COLOR)
     current_y += title_height + title_bottom_margin
 
     # Define Column layout
@@ -286,20 +280,20 @@ def draw_header(info, width):
     col3_x = margin_left + int(width * 0.66)
 
     # Row 1
-    draw.text((col1_x, current_y), f"Size: {info['size']}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col2_x, current_y), f"FPS: {info['fps']}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col3_x, current_y), f"Aspect ratio: {info['aspect_ratio']}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col1_x, current_y), f"Size: {info["size"]}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col2_x, current_y), f"FPS: {info["fps"]}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col3_x, current_y), f"Aspect ratio: {info["aspect_ratio"]}", font=text_font, fill=TEXT_COLOR)
     current_y += line_spacing
 
     # Row 2
-    draw.text((col1_x, current_y), f"Resolution: {info['resolution']}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col2_x, current_y), f"Video format: {info['v_format']}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col3_x, current_y), f"Audio rate: {info['a_rate']}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col1_x, current_y), f"Resolution: {info["resolution"]}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col2_x, current_y), f"Video format: {info["v_format"]}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col3_x, current_y), f"Audio rate: {info["a_rate"]}", font=text_font, fill=TEXT_COLOR)
     current_y += line_spacing
 
     # Row 3
-    draw.text((col1_x, current_y), f"Length: {info['length']}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col2_x, current_y), f"Audio format: {info['a_format']}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col1_x, current_y), f"Length: {info["length"]}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col2_x, current_y), f"Audio format: {info["a_format"]}", font=text_font, fill=TEXT_COLOR)
 
     return header_img
 
@@ -311,7 +305,7 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
         print(f"Warning: Skipped {os.path.basename(video_path)}: Could not extract metadata.")
         return
 
-    duration = info['duration_s']
+    duration = info["duration_s"]
     effective_duration = duration - skip_at_start
 
     if effective_duration <= 0:
@@ -374,12 +368,12 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
     # Determine Output Name
     if output_arg:
         if os.path.isdir(output_arg):
-            out_base = os.path.join(output_arg, f"{info['filename']}.png")
+            out_base = os.path.join(output_arg, f"{info["filename"]}.png")
         else:
             out_base_name, _ = os.path.splitext(output_arg)
             out_base = f"{out_base_name}.png"
     else:
-        out_base = os.path.join(os.path.dirname(video_path), f"{info['filename']}.png")
+        out_base = os.path.join(os.path.dirname(video_path), f"{info["filename"]}.png")
 
     final_output_path = get_unique_filename(out_base, ".png")
     final_canvas.save(final_output_path)
@@ -390,7 +384,7 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Generate a visual summary contact sheet for video files.")
 
-    parser.add_argument("target", nargs='?', help="A single video file or a directory to process (positional)")
+    parser.add_argument("target", nargs="?", help="A single video file or a directory to process (positional)")
     parser.add_argument("--file", help="Specific single video file to process")
     parser.add_argument("--directory", help="Directory to scan for video files")
     parser.add_argument("--output", help="Output file path, directory, or base name. Appends counter if exists.")
@@ -408,7 +402,7 @@ if __name__ == "__main__":
         if os.path.isfile(args.file):
             video_targets.append(args.file)
         else:
-            print(f"Error: The file '{args.file}' does not exist.")
+            print(f"Error: The file "{args.file}" does not exist.")
             sys.exit(1)
     elif args.target and os.path.isfile(args.target):
         video_targets.append(args.target)
@@ -422,7 +416,7 @@ if __name__ == "__main__":
             scan_dir = os.getcwd()
 
         if not os.path.isdir(scan_dir):
-            print(f"Error: The directory '{scan_dir}' does not exist.")
+            print(f"Error: The directory "{scan_dir}" does not exist.")
             sys.exit(1)
 
         for root, _, files in os.walk(scan_dir):
