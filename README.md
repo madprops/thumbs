@@ -1,3 +1,13 @@
+## Automatic Install
+
+Install `pipx` first.
+
+Then do `pipx install git+https://github.com/madprops/thumbs --force`
+
+Now you have `thumbs` available as a program.
+
+## Manual Install
+
 Go to your code directory.
 
 Git clone this: `git clone https://github.com/madprops/thumbs`

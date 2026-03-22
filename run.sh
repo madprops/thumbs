@@ -2,4 +2,4 @@
 root="$(dirname "$(readlink -f "$0")")"
 cd "$root"
 
-venv/bin/python thumbs.py "$@"
+venv/bin/python src/main.py "$@"
