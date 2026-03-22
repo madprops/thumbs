@@ -409,7 +409,7 @@ if __name__ == "__main__":
         if os.path.isfile(args.file):
             video_targets.append(args.file)
         else:
-            print(f"Error: The file "{args.file}" does not exist.")
+            print(f"Error: The file '{args.file}' does not exist.")
             sys.exit(1)
     elif args.target and os.path.isfile(args.target):
         video_targets.append(args.target)
