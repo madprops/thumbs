@@ -46,7 +46,6 @@ def get_unique_filename(base_path, extension):
     directory = os.path.dirname(base_path)
     filename = os.path.basename(base_path)
     name, ext = os.path.splitext(filename)
-
     final_path = os.path.join(directory, f"{name}{extension}")
     counter = 1
 
@@ -82,6 +81,7 @@ def get_video_info(video_path):
 
         # Duration calculation
         duration_s = metadata.get("format", {}).get("duration")
+
         if not duration_s:
             for stream in metadata.get("streams", []):
                 if stream.get("codec_type") == "video" and "duration" in stream:
@@ -136,7 +136,6 @@ def get_video_info(video_path):
         aspect_ratio = v_stream.get("display_aspect_ratio", "N/A")
 
         if aspect_ratio == "N/A" or aspect_ratio == "0:1":
-
             if width and height:
                 gcd = math.gcd(width, height)
                 aspect_ratio = f"{width//gcd}:{height//gcd}"
@@ -203,6 +202,7 @@ def extract_frame_at_time(video_path, time_s, target_width):
 
 def draw_timestamp_on_image(image, text):
     draw = ImageDraw.Draw(image)
+
     if SELECTED_FONT_PATH:
         try:
             font = ImageFont.truetype(SELECTED_FONT_PATH, FONT_SIZE)
@@ -224,6 +224,7 @@ def draw_timestamp_on_image(image, text):
     y = image.height - text_height - margin_y
 
     padding = 3
+
     draw.rectangle(
         [x - padding, y - padding, x + text_width + padding, y + text_height + padding],
         fill=TIMESTAMP_BG_COLOR
@@ -264,7 +265,6 @@ def draw_header(info, width):
     header_height = margin_top + title_height + title_bottom_margin + (3 * line_spacing) + bottom_margin
     header_img = Image.new("RGB", (width, header_height), BG_COLOR)
     draw = ImageDraw.Draw(header_img)
-
     current_y = margin_top
 
     # Draw Title
@@ -277,24 +277,24 @@ def draw_header(info, width):
     col3_x = margin_left + int(width * 0.66)
 
     # Row 1
-    draw.text((col1_x, current_y), f"Size: {info["size"]}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col2_x, current_y), f"FPS: {info["fps"]}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col3_x, current_y), f"Aspect ratio: {info["aspect_ratio"]}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col1_x, current_y), f"Size: {info['size']}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col2_x, current_y), f"FPS: {info['fps']}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col3_x, current_y), f"Aspect ratio: {info['aspect_ratio']}", font=text_font, fill=TEXT_COLOR)
     current_y += line_spacing
 
     # Row 2
-    draw.text((col1_x, current_y), f"Resolution: {info["resolution"]}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col2_x, current_y), f"Video format: {info["v_format"]}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col3_x, current_y), f"Audio rate: {info["a_rate"]}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col1_x, current_y), f"Resolution: {info['resolution']}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col2_x, current_y), f"Video format: {info['v_format']}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col3_x, current_y), f"Audio rate: {info['a_rate']}", font=text_font, fill=TEXT_COLOR)
     current_y += line_spacing
 
     # Row 3
-    draw.text((col1_x, current_y), f"Length: {info["length"]}", font=text_font, fill=TEXT_COLOR)
-    draw.text((col2_x, current_y), f"Audio format: {info["a_format"]}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col1_x, current_y), f"Length: {info['length']}", font=text_font, fill=TEXT_COLOR)
+    draw.text((col2_x, current_y), f"Audio format: {info['a_format']}", font=text_font, fill=TEXT_COLOR)
 
     return header_img
 
-def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_start, use_jpg):
+def process_video_file(video_path, output_arg, cols, rows, default_thumb_width, skip_at_start, use_jpg, target_width=None, target_height=None):
     print(f"\nProcessing {os.path.basename(video_path)}...")
 
     info = get_video_info(video_path)
@@ -309,6 +309,55 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
         print(f"Warning: Video too short or start skip too long. Skipped.")
         return
 
+    # Automatically calculate thumb_width if target boundaries are requested
+    thumb_width = default_thumb_width
+
+    if target_width or target_height:
+        v_w, v_h = 1920, 1080
+
+        if info["resolution"] != "N/A":
+            parts = info["resolution"].split("x")
+            if len(parts) == 2:
+                v_w, v_h = int(parts[0]), int(parts[1])
+
+        ar = v_w / v_h if v_h > 0 else 16 / 9
+
+        if target_width and target_height:
+            dummy_header = draw_header(info, target_width)
+            header_h = dummy_header.height
+            avail_h = target_height - header_h
+
+            if avail_h > 0:
+                max_w_per_thumb = (target_width - (cols + 1) * DEFAULT_MARGIN) / cols
+                max_h_per_thumb = (avail_h - (rows + 1) * DEFAULT_MARGIN) / rows
+
+                test_w = max_w_per_thumb
+                test_h = test_w / ar
+
+                if test_h > max_h_per_thumb:
+                    test_h = max_h_per_thumb
+                    test_w = test_h * ar
+
+                thumb_width = int(test_w)
+            else:
+                thumb_width = int((target_width - (cols + 1) * DEFAULT_MARGIN) / cols)
+
+        elif target_width:
+            thumb_width = int((target_width - (cols + 1) * DEFAULT_MARGIN) / cols)
+
+        elif target_height:
+            dummy_header = draw_header(info, 1000)
+            header_h = dummy_header.height
+            avail_h = target_height - header_h
+
+            if avail_h > 0:
+                max_h_per_thumb = (avail_h - (rows + 1) * DEFAULT_MARGIN) / rows
+                thumb_width = int(max_h_per_thumb * ar)
+
+        if thumb_width < 10:
+            print("Warning: Calculated thumbnail width is extremely small. Using minimum 10px.")
+            thumb_width = 10
+
     num_thumbs = cols * rows
     intervals = []
 
@@ -317,6 +366,7 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
         intervals.append(t)
 
     thumbnails = []
+
     for t in intervals:
         total_seconds = int(t)
         hours = total_seconds // 3600
@@ -325,6 +375,7 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
         time_str = f"{hours:02}:{minutes:02}:{seconds:02}"
 
         thumb_pil = extract_frame_at_time(video_path, t, thumb_width)
+
         if thumb_pil:
             draw_timestamp_on_image(thumb_pil, time_str)
             thumbnails.append(thumb_pil)
@@ -353,6 +404,7 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
 
     # Paste Thumbnails
     current_y_offset = header_img.height
+
     for idx, thumb in enumerate(thumbnails):
         current_col = idx % cols
         current_row = idx // cols
@@ -394,28 +446,36 @@ def main():
     parser.add_argument("--cols", type=int, default=DEFAULT_COLUMNS, help=f"Number of columns. Default: {DEFAULT_COLUMNS}")
     parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help=f"Number of rows. Default: {DEFAULT_ROWS}")
     parser.add_argument("--thumb-width", type=int, default=DEFAULT_THUMB_WIDTH, help=f"Thumbnail width in pixels. Default: {DEFAULT_THUMB_WIDTH}")
+    parser.add_argument("--width", type=int, help="Target total max width of the generated image")
+    parser.add_argument("--height", type=int, help="Target total max height of the generated image")
     parser.add_argument("--skip-at-start", type=int, default=20, help="Seconds to skip at the beginning. Default: 20")
     parser.add_argument("--jpg", action="store_true", help="Save the output image as JPG instead of PNG")
 
     args = parser.parse_args()
 
+    # Resolve inputs to absolute paths early so they work cleanly everywhere
+    abs_file = os.path.abspath(args.file) if args.file else None
+    abs_target = os.path.abspath(args.target) if args.target else None
+    abs_dir = os.path.abspath(args.directory) if args.directory else None
+    abs_out = os.path.abspath(args.output) if args.output else None
+
     # Determine the execution targets based on priority
     video_targets = []
 
-    if args.file:
-        if os.path.isfile(args.file):
-            video_targets.append(args.file)
+    if abs_file:
+        if os.path.isfile(abs_file):
+            video_targets.append(abs_file)
         else:
-            print(f"Error: The file '{args.file}' does not exist.")
+            print(f"Error: The file '{abs_file}' does not exist.")
             sys.exit(1)
-    elif args.target and os.path.isfile(args.target):
-        video_targets.append(args.target)
+    elif abs_target and os.path.isfile(abs_target):
+        video_targets.append(abs_target)
     else:
         # Determine directory to scan
-        if args.directory:
-            scan_dir = args.directory
-        elif args.target and os.path.isdir(args.target):
-            scan_dir = args.target
+        if abs_dir:
+            scan_dir = abs_dir
+        elif abs_target and os.path.isdir(abs_target):
+            scan_dir = abs_target
         else:
             scan_dir = os.getcwd()
 
@@ -435,12 +495,14 @@ def main():
     for video in video_targets:
         process_video_file(
             video,
-            args.output,
+            abs_out,
             args.cols,
             args.rows,
             args.thumb_width,
             args.skip_at_start,
             args.jpg,
+            args.width,
+            args.height
         )
 
 
