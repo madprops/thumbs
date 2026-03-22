@@ -27,7 +27,7 @@ GRID_BG_COLOR = (15, 15, 15)         # Almost black for the thumbnail grid backg
 TIMESTAMP_BG_COLOR = (0, 0, 0, 180)  # Darker semi-transparent black for timestamps
 TIMESTAMP_TEXT_COLOR = (255, 255, 255) # White
 
-VIDEO_EXTENSIONS = (".mp4", ".avi", ".mkv", ".mov", ".flv", ".wmv", ".mpeg", "webm")
+VIDEO_EXTENSIONS = (".mp4", ".avi", ".mkv", ".mov", ".flv", ".wmv", ".mpeg", ".webm")
 
 possible_fonts = [
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
@@ -42,6 +42,25 @@ SELECTED_FONT_PATH = next((f for f in possible_fonts if os.path.exists(f)), None
 
 # --- Helper Functions ---
 
+def resolve_target(target):
+    if not target:
+        return None
+    if os.path.isabs(target):
+        return os.path.abspath(target)
+    cwd_path = os.path.abspath(target)
+
+    if os.path.exists(cwd_path):
+        return cwd_path
+
+    shell_pwd = os.environ.get('PWD')
+
+    if shell_pwd:
+        pwd_path = os.path.abspath(os.path.join(shell_pwd, target))
+        if os.path.exists(pwd_path):
+            return pwd_path
+
+    return cwd_path
+
 def get_unique_filename(base_path, extension):
     directory = os.path.dirname(base_path)
     filename = os.path.basename(base_path)
@@ -52,15 +71,12 @@ def get_unique_filename(base_path, extension):
     while os.path.exists(final_path):
         counter += 1
         final_path = os.path.join(directory, f"{name}({counter}){extension}")
-
     return final_path
-
 
 def get_video_info(video_path):
     if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
         print("Error: ffmpeg/ffprobe not found. Please install them and ensure they're in your PATH.")
         return None
-
     cmd = [
         "ffprobe",
         "-v", "quiet",
@@ -69,7 +85,6 @@ def get_video_info(video_path):
         "-show_streams",
         video_path
     ]
-
     try:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
         stdout, stderr = process.communicate()
@@ -77,7 +92,6 @@ def get_video_info(video_path):
         if process.returncode != 0:
             print(f"Error running ffprobe: {stderr.strip()}")
             return None
-
         metadata = json.loads(stdout)
         format_info = metadata.get("format", {})
 
@@ -89,7 +103,6 @@ def get_video_info(video_path):
                 if ((stream.get("codec_type") == "video") and ("duration" in stream)):
                     duration_s = stream["duration"]
                     break
-
         if not duration_s:
             return None
 
@@ -103,7 +116,11 @@ def get_video_info(video_path):
         # Size calculation
         file_size_bytes = int(format_info.get("size", 0))
         file_size_mb = file_size_bytes / (1024 * 1024)
-        size_str = f"{file_size_mb:.0f} MB" if (file_size_mb > 0) else "N/A"
+
+        if (file_size_mb > 0):
+            size_str = f"{file_size_mb:.0f} MB"
+        else:
+            size_str = "N/A"
 
         # Bitrate calculation (Overall)
         bitrate_bps = int(format_info.get("bit_rate", 0))
@@ -120,14 +137,21 @@ def get_video_info(video_path):
 
         width = v_stream.get("width", 0)
         height = v_stream.get("height", 0)
-        resolution_str = f"{width}x{height}" if (width and height) else "N/A"
+
+        if (width and height):
+            resolution_str = f"{width}x{height}"
+        else:
+            resolution_str = "N/A"
 
         # FPS evaluation
         fps_str = v_stream.get("r_frame_rate", "0/1")
 
         if ("/" in fps_str):
             num, den = fps_str.split("/")
-            fps = round(int(num) / int(den), 3) if (int(den) != 0) else "N/A"
+            if (int(den) != 0):
+                fps = round(int(num) / int(den), 3)
+            else:
+                fps = "N/A"
         else:
             fps = fps_str
 
@@ -141,7 +165,11 @@ def get_video_info(video_path):
 
         # Audio formatting
         a_rate = a_stream.get("sample_rate", "N/A")
-        a_rate_str = f"{a_rate} Hz" if (a_rate != "N/A") else "N/A"
+
+        if (a_rate != "N/A"):
+            a_rate_str = f"{a_rate} Hz"
+        else:
+            a_rate_str = "N/A"
 
         return {
             "filename": os.path.basename(video_path),
@@ -156,11 +184,9 @@ def get_video_info(video_path):
             "aspect_ratio": aspect_ratio,
             "a_rate": a_rate_str
         }
-
     except Exception as e:
         print(f"An unexpected error occurred parsing metadata for {video_path}: {e}")
         return None
-
 
 def extract_frame_at_time(video_path, time_s, target_width):
     cmd = [
@@ -173,6 +199,7 @@ def extract_frame_at_time(video_path, time_s, target_width):
         "-vcodec", "mjpeg",
         "-"
     ]
+
     try:
         process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         stdout, stderr = process.communicate()
@@ -193,10 +220,8 @@ def extract_frame_at_time(video_path, time_s, target_width):
         except AttributeError:
             pil_image = pil_image.resize((target_width, h_size), Image.ANTIALIAS)
         return pil_image
-
     except Exception:
         return None
-
 
 def draw_timestamp_on_image(image, text):
     draw = ImageDraw.Draw(image)
@@ -230,7 +255,6 @@ def draw_timestamp_on_image(image, text):
 
     draw.text((x, y), text, font=font, fill=TIMESTAMP_TEXT_COLOR)
     return image
-
 
 def draw_header(info, width):
     if SELECTED_FONT_PATH:
@@ -290,11 +314,10 @@ def draw_header(info, width):
     # Row 3
     draw.text((col1_x, current_y), f"Length: {info['length']}", font=text_font, fill=TEXT_COLOR)
     draw.text((col2_x, current_y), f"Audio format: {info['a_format']}", font=text_font, fill=TEXT_COLOR)
-
     return header_img
 
-
-def process_video_file(video_path, output_path, cols, rows, thumb_width, margin):
+def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at_start, use_jpg, target_width, target_height):
+    margin = DEFAULT_MARGIN
     info = get_video_info(video_path)
 
     if not info:
@@ -305,7 +328,14 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, margin)
 
     # Calculate Grid
     total_thumbs = cols * rows
-    interval = info["duration_s"] / (total_thumbs + 1)
+
+    if (info["duration_s"] > skip_at_start):
+        duration = info["duration_s"] - skip_at_start
+    else:
+        duration = info["duration_s"]
+        skip_at_start = 0
+
+    interval = duration / (total_thumbs + 1)
 
     # Pre-calculate heights
     try:
@@ -315,7 +345,7 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, margin)
         font = ImageFont.load_default()
         title_font = ImageFont.load_default()
 
-    # Define Summary Lines (Added Bitrate here)
+    # Define Summary Lines
     info_lines = [
         f"File: {info['filename']}",
         f"Size: {info['size']}, Duration: {info['length']}, Bitrate: {info['bitrate']}",
@@ -329,12 +359,17 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, margin)
     header_height = header_padding * 2
 
     for i, line in enumerate(info_lines):
-        f = title_font if (i == 0) else font
+        if (i == 0):
+            f = title_font
+        else:
+            f = font
+
         bbox = f.getbbox(line)
         header_height += (bbox[3] - bbox[1]) + line_spacing
 
     # Calculate Layout
-    sample_thumb = extract_frame_at_time(video_path, interval, thumb_width)
+    sample_time = skip_at_start + interval
+    sample_thumb = extract_frame_at_time(video_path, sample_time, thumb_width)
 
     if not sample_thumb:
         print(f"Error: Could not extract sample frame from {video_path}")
@@ -356,14 +391,18 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, margin)
     current_y = header_padding
 
     for i, line in enumerate(info_lines):
-        f = title_font if (i == 0) else font
+        if (i == 0):
+            f = title_font
+        else:
+            f = font
+
         draw.text((header_padding, current_y), line, font=f, fill=TEXT_COLOR)
         bbox = f.getbbox(line)
         current_y += (bbox[3] - bbox[1]) + line_spacing
 
     # Process Thumbnails
     for i in range(total_thumbs):
-        time_s = interval * (i + 1)
+        time_s = skip_at_start + (interval * (i + 1))
         thumb = extract_frame_at_time(video_path, time_s, thumb_width)
 
         if thumb:
@@ -391,13 +430,51 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, margin)
 
             draw.text((ts_x + padding, ts_y + padding), ts_str, font=font, fill=TIMESTAMP_TEXT_COLOR)
 
+    # Apply Image Resizing if provided
+    if target_width or target_height:
+        orig_w, orig_h = canvas.size
+
+        if target_width:
+            new_w = target_width
+        else:
+            new_w = orig_w
+
+        if target_height:
+            new_h = target_height
+        else:
+            new_h = orig_h
+
+        if (target_width and not target_height):
+            new_h = int(orig_h * (target_width / orig_w))
+        elif (target_height and not target_width):
+            new_w = int(orig_w * (target_height / orig_h))
+
+        try:
+            canvas = canvas.resize((new_w, new_h), Image.Resampling.LANCZOS)
+        except AttributeError:
+            canvas = canvas.resize((new_w, new_h), Image.ANTIALIAS)
+
     # Save Output
+    if use_jpg:
+        ext = ".jpg"
+    else:
+        ext = ".png"
+
     if not output_path:
-        output_path = get_unique_filename(video_path, ".jpg")
+        output_path = get_unique_filename(video_path, ext)
+    elif os.path.isdir(output_path):
+        base_name = os.path.splitext(os.path.basename(video_path))[0]
+        output_path = get_unique_filename(os.path.join(output_path, base_name), ext)
+    else:
+        if not output_path.lower().endswith(('.jpg', '.jpeg', '.png')):
+            output_path = f"{output_path}{ext}"
 
-    canvas.save(output_path, "JPEG", quality=90)
+    if use_jpg:
+        canvas.save(output_path, "JPEG", quality=90)
+    else:
+        canvas.save(output_path, "PNG")
+
     print(f"Saved summary to: {output_path}")
-
 
 def main():
     parser = argparse.ArgumentParser(description="Generate a visual summary contact sheet for video files.")
@@ -416,13 +493,27 @@ def main():
 
     args = parser.parse_args()
 
-    # Resolve inputs to absolute paths early so they work cleanly everywhere
-    abs_file = os.path.abspath(args.file) if args.file else None
-    abs_target = os.path.abspath(args.target) if args.target else None
-    abs_dir = os.path.abspath(args.directory) if args.directory else None
-    abs_out = os.path.abspath(args.output) if args.output else None
+    # Resolve inputs to absolute paths taking into account if wrapper script changed directories
+    if args.file:
+        abs_file = resolve_target(args.file)
+    else:
+        abs_file = None
 
-    # Determine the execution targets based on priority
+    if args.target:
+        abs_target = resolve_target(args.target)
+    else:
+        abs_target = None
+
+    if args.directory:
+        abs_dir = resolve_target(args.directory)
+    else:
+        abs_dir = None
+
+    if args.output:
+        abs_out = resolve_target(args.output)
+    else:
+        abs_out = None
+
     video_targets = []
 
     if abs_file:
@@ -440,7 +531,12 @@ def main():
         elif abs_target and os.path.isdir(abs_target):
             scan_dir = abs_target
         else:
-            scan_dir = os.getcwd()
+            shell_pwd = os.environ.get('PWD')
+
+            if shell_pwd:
+                scan_dir = shell_pwd
+            else:
+                scan_dir = os.getcwd()
 
         if not os.path.isdir(scan_dir):
             print(f"Error: The directory '{scan_dir}' does not exist.")
@@ -467,7 +563,6 @@ def main():
             args.width,
             args.height
         )
-
 
 if __name__ == "__main__":
     main()
