@@ -1,3 +1,7 @@
+Go to your code directory.
+
+Git clone this: `git clone https://github.com/madprops/thumbs`
+
 Run `./install.sh`
 
 This installs the dependencies.
