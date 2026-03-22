@@ -378,7 +378,7 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
 
     final_output_path = get_unique_filename(out_base, ext)
 
-    :
+    if use_jpg:
         final_canvas.save(final_output_path, quality=95)
     else:
         final_canvas.save(final_output_path)
