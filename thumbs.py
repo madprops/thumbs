@@ -423,7 +423,7 @@ if __name__ == "__main__":
             scan_dir = os.getcwd()
 
         if not os.path.isdir(scan_dir):
-            print(f"Error: The directory "{scan_dir}" does not exist.")
+            print(f"Error: The directory '{scan_dir}' does not exist.")
             sys.exit(1)
 
         for root, _, files in os.walk(scan_dir):
