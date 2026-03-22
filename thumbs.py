@@ -297,7 +297,7 @@ def draw_header(info, width):
 
     return header_img
 
-def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_start):
+def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_start, use_jpg):
     print(f"\nProcessing {os.path.basename(video_path)}...")
 
     info = get_video_info(video_path)
@@ -365,18 +365,24 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
 
         final_canvas.paste(thumb, (x_pos, y_pos))
 
-    # Determine Output Name
+    ext = ".jpg"  else ".png"
+
     if output_arg:
         if os.path.isdir(output_arg):
-            out_base = os.path.join(output_arg, f"{info["filename"]}.png")
+            out_base = os.path.join(output_arg, f"{info['filename']}{ext}")
         else:
             out_base_name, _ = os.path.splitext(output_arg)
-            out_base = f"{out_base_name}.png"
+            out_base = f"{out_base_name}{ext}"
     else:
-        out_base = os.path.join(os.path.dirname(video_path), f"{info["filename"]}.png")
+        out_base = os.path.join(os.path.dirname(video_path), f"{info['filename']}{ext}")
 
-    final_output_path = get_unique_filename(out_base, ".png")
-    final_canvas.save(final_output_path)
+    final_output_path = get_unique_filename(out_base, ext)
+
+    :
+        final_canvas.save(final_output_path, quality=95)
+    else:
+        final_canvas.save(final_output_path)
+
     print(f"Summary saved at: {final_output_path}")
 
 # --- Main Logic ---
@@ -392,6 +398,7 @@ if __name__ == "__main__":
     parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help=f"Number of rows. Default: {DEFAULT_ROWS}")
     parser.add_argument("--thumb-width", type=int, default=DEFAULT_THUMB_WIDTH, help=f"Thumbnail width in pixels. Default: {DEFAULT_THUMB_WIDTH}")
     parser.add_argument("--skip-at-start", type=int, default=20, help="Seconds to skip at the beginning. Default: 20")
+    parser.add_argument("--jpg", action="store_true", help="Save the output image as JPG instead of PNG")
 
     args = parser.parse_args()
 
@@ -435,5 +442,6 @@ if __name__ == "__main__":
             args.cols,
             args.rows,
             args.thumb_width,
-            args.skip_at_start
+            args.skip_at_start,
+            args.jpg,
         )
