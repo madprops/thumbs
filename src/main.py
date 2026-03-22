@@ -55,6 +55,7 @@ def get_unique_filename(base_path, extension):
 
     return final_path
 
+
 def get_video_info(video_path):
     if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
         print("Error: ffmpeg/ffprobe not found. Please install them and ensure they're in your PATH.")
@@ -78,13 +79,14 @@ def get_video_info(video_path):
             return None
 
         metadata = json.loads(stdout)
+        format_info = metadata.get("format", {})
 
         # Duration calculation
-        duration_s = metadata.get("format", {}).get("duration")
+        duration_s = format_info.get("duration")
 
         if not duration_s:
             for stream in metadata.get("streams", []):
-                if stream.get("codec_type") == "video" and "duration" in stream:
+                if ((stream.get("codec_type") == "video") and ("duration" in stream)):
                     duration_s = stream["duration"]
                     break
 
@@ -99,60 +101,54 @@ def get_video_info(video_path):
         duration_str = f"{hours:02}:{minutes:02}:{seconds:02}"
 
         # Size calculation
-        file_size_bytes = int(metadata.get("format", {}).get("size", 0))
+        file_size_bytes = int(format_info.get("size", 0))
         file_size_mb = file_size_bytes / (1024 * 1024)
+        size_str = f"{file_size_mb:.0f} MB" if (file_size_mb > 0) else "N/A"
 
-        if file_size_mb > 0:
-            size_str = f"{file_size_mb:.0f} MB"
+        # Bitrate calculation (Overall)
+        bitrate_bps = int(format_info.get("bit_rate", 0))
+
+        if (bitrate_bps > 0):
+            bitrate_kbps = bitrate_bps / 1000
+            bitrate_str = f"{bitrate_kbps:.0f} kb/s"
         else:
-            size_str = "N/A"
+            bitrate_str = "N/A"
 
         # Stream specifics
-        v_stream = next((s for s in metadata.get("streams", []) if s.get("codec_type") == "video"), {})
-        a_stream = next((s for s in metadata.get("streams", []) if s.get("codec_type") == "audio"), {})
+        v_stream = next((s for s in metadata.get("streams", []) if (s.get("codec_type") == "video")), {})
+        a_stream = next((s for s in metadata.get("streams", []) if (s.get("codec_type") == "audio")), {})
 
         width = v_stream.get("width", 0)
         height = v_stream.get("height", 0)
-
-        if width and height:
-            resolution_str = f"{width}x{height}"
-        else:
-            resolution_str = "N/A"
+        resolution_str = f"{width}x{height}" if (width and height) else "N/A"
 
         # FPS evaluation
         fps_str = v_stream.get("r_frame_rate", "0/1")
 
-        if "/" in fps_str:
+        if ("/" in fps_str):
             num, den = fps_str.split("/")
-
-            if int(den) != 0:
-                fps = round(int(num) / int(den), 3)
-            else:
-                fps = "N/A"
+            fps = round(int(num) / int(den), 3) if (int(den) != 0) else "N/A"
         else:
             fps = fps_str
 
         # Aspect Ratio
         aspect_ratio = v_stream.get("display_aspect_ratio", "N/A")
 
-        if aspect_ratio == "N/A" or aspect_ratio == "0:1":
-            if width and height:
+        if ((aspect_ratio == "N/A") or (aspect_ratio == "0:1")):
+            if (width and height):
                 gcd = math.gcd(width, height)
-                aspect_ratio = f"{width//gcd}:{height//gcd}"
+                aspect_ratio = f"{width // gcd}:{height // gcd}"
 
         # Audio formatting
         a_rate = a_stream.get("sample_rate", "N/A")
-
-        if a_rate != "N/A":
-            a_rate_str = f"{a_rate} Hz"
-        else:
-            a_rate_str = "N/A"
+        a_rate_str = f"{a_rate} Hz" if (a_rate != "N/A") else "N/A"
 
         return {
             "filename": os.path.basename(video_path),
             "duration_s": duration,
             "length": duration_str,
             "size": size_str,
+            "bitrate": bitrate_str,
             "resolution": resolution_str,
             "fps": str(fps),
             "v_format": v_stream.get("codec_name", "N/A"),
@@ -164,6 +160,7 @@ def get_video_info(video_path):
     except Exception as e:
         print(f"An unexpected error occurred parsing metadata for {video_path}: {e}")
         return None
+
 
 def extract_frame_at_time(video_path, time_s, target_width):
     cmd = [
@@ -200,6 +197,7 @@ def extract_frame_at_time(video_path, time_s, target_width):
     except Exception:
         return None
 
+
 def draw_timestamp_on_image(image, text):
     draw = ImageDraw.Draw(image)
 
@@ -232,6 +230,7 @@ def draw_timestamp_on_image(image, text):
 
     draw.text((x, y), text, font=font, fill=TIMESTAMP_TEXT_COLOR)
     return image
+
 
 def draw_header(info, width):
     if SELECTED_FONT_PATH:
@@ -294,147 +293,111 @@ def draw_header(info, width):
 
     return header_img
 
-def process_video_file(video_path, output_arg, cols, rows, default_thumb_width, skip_at_start, use_jpg, target_width=None, target_height=None):
-    print(f"\nProcessing {os.path.basename(video_path)}...")
 
+def process_video_file(video_path, output_path, cols, rows, thumb_width, margin):
     info = get_video_info(video_path)
+
     if not info:
-        print(f"Warning: Skipped {os.path.basename(video_path)}: Could not extract metadata.")
+        print(f"Skipping {video_path}: Could not retrieve metadata.")
         return
 
-    duration = info["duration_s"]
-    effective_duration = duration - skip_at_start
+    print(f"Processing: {info['filename']} ({info['length']})")
 
-    if effective_duration <= 0:
-        print(f"Warning: Video too short or start skip too long. Skipped.")
+    # Calculate Grid
+    total_thumbs = cols * rows
+    interval = info["duration_s"] / (total_thumbs + 1)
+
+    # Pre-calculate heights
+    try:
+        font = ImageFont.truetype(SELECTED_FONT_PATH, FONT_SIZE)
+        title_font = ImageFont.truetype(SELECTED_FONT_PATH, TITLE_FONT_SIZE)
+    except:
+        font = ImageFont.load_default()
+        title_font = ImageFont.load_default()
+
+    # Define Summary Lines (Added Bitrate here)
+    info_lines = [
+        f"File: {info['filename']}",
+        f"Size: {info['size']}, Duration: {info['length']}, Bitrate: {info['bitrate']}",
+        f"Video: {info['v_format']}, {info['resolution']}, {info['fps']} fps, {info['aspect_ratio']}",
+        f"Audio: {info['a_format']}, {info['a_rate']}"
+    ]
+
+    # Calculate Header Height
+    line_spacing = 8
+    header_padding = 20
+    header_height = header_padding * 2
+
+    for i, line in enumerate(info_lines):
+        f = title_font if (i == 0) else font
+        bbox = f.getbbox(line)
+        header_height += (bbox[3] - bbox[1]) + line_spacing
+
+    # Calculate Layout
+    sample_thumb = extract_frame_at_time(video_path, interval, thumb_width)
+
+    if not sample_thumb:
+        print(f"Error: Could not extract sample frame from {video_path}")
         return
 
-    # Automatically calculate thumb_width if target boundaries are requested
-    thumb_width = default_thumb_width
+    thumb_h = sample_thumb.height
+    grid_width = (cols * thumb_width) + ((cols + 1) * margin)
+    grid_height = (rows * thumb_h) + ((rows + 1) * margin)
+    full_height = header_height + grid_height
 
-    if target_width or target_height:
-        v_w, v_h = 1920, 1080
+    # Create Canvas
+    canvas = Image.new("RGB", (grid_width, full_height), GRID_BG_COLOR)
+    draw = ImageDraw.Draw(canvas)
 
-        if info["resolution"] != "N/A":
-            parts = info["resolution"].split("x")
-            if len(parts) == 2:
-                v_w, v_h = int(parts[0]), int(parts[1])
+    # Draw Header Background
+    draw.rectangle([0, 0, grid_width, header_height], fill=BG_COLOR)
 
-        ar = v_w / v_h if v_h > 0 else 16 / 9
+    # Draw Metadata Text
+    current_y = header_padding
 
-        if target_width and target_height:
-            dummy_header = draw_header(info, target_width)
-            header_h = dummy_header.height
-            avail_h = target_height - header_h
+    for i, line in enumerate(info_lines):
+        f = title_font if (i == 0) else font
+        draw.text((header_padding, current_y), line, font=f, fill=TEXT_COLOR)
+        bbox = f.getbbox(line)
+        current_y += (bbox[3] - bbox[1]) + line_spacing
 
-            if avail_h > 0:
-                max_w_per_thumb = (target_width - (cols + 1) * DEFAULT_MARGIN) / cols
-                max_h_per_thumb = (avail_h - (rows + 1) * DEFAULT_MARGIN) / rows
+    # Process Thumbnails
+    for i in range(total_thumbs):
+        time_s = interval * (i + 1)
+        thumb = extract_frame_at_time(video_path, time_s, thumb_width)
 
-                test_w = max_w_per_thumb
-                test_h = test_w / ar
+        if thumb:
+            col = i % cols
+            row = i // cols
+            x = (col * thumb_width) + ((col + 1) * margin)
+            y = header_height + (row * thumb_h) + ((row + 1) * margin)
 
-                if test_h > max_h_per_thumb:
-                    test_h = max_h_per_thumb
-                    test_w = test_h * ar
+            canvas.paste(thumb, (x, y))
 
-                thumb_width = int(test_w)
-            else:
-                thumb_width = int((target_width - (cols + 1) * DEFAULT_MARGIN) / cols)
+            # Draw timestamp on thumbnail
+            ts_str = time.strftime("%H:%M:%S", time.gmtime(time_s))
+            ts_bbox = font.getbbox(ts_str)
+            ts_w = ts_bbox[2] - ts_bbox[0]
+            ts_h = ts_bbox[3] - ts_bbox[1]
 
-        elif target_width:
-            thumb_width = int((target_width - (cols + 1) * DEFAULT_MARGIN) / cols)
+            padding = 4
+            ts_x = x + thumb_width - ts_w - (padding * 2) - 5
+            ts_y = y + thumb_h - ts_h - (padding * 2) - 5
 
-        elif target_height:
-            dummy_header = draw_header(info, 1000)
-            header_h = dummy_header.height
-            avail_h = target_height - header_h
+            draw.rectangle(
+                [ts_x, ts_y, ts_x + ts_w + (padding * 2), ts_y + ts_h + (padding * 2)],
+                fill=TIMESTAMP_BG_COLOR
+            )
 
-            if avail_h > 0:
-                max_h_per_thumb = (avail_h - (rows + 1) * DEFAULT_MARGIN) / rows
-                thumb_width = int(max_h_per_thumb * ar)
+            draw.text((ts_x + padding, ts_y + padding), ts_str, font=font, fill=TIMESTAMP_TEXT_COLOR)
 
-        if thumb_width < 10:
-            print("Warning: Calculated thumbnail width is extremely small. Using minimum 10px.")
-            thumb_width = 10
+    # Save Output
+    if not output_path:
+        output_path = get_unique_filename(video_path, ".jpg")
 
-    num_thumbs = cols * rows
-    intervals = []
+    canvas.save(output_path, "JPEG", quality=90)
+    print(f"Saved summary to: {output_path}")
 
-    for i in range(num_thumbs):
-        t = skip_at_start + (effective_duration / (num_thumbs + 1)) * (i + 1)
-        intervals.append(t)
-
-    thumbnails = []
-
-    for t in intervals:
-        total_seconds = int(t)
-        hours = total_seconds // 3600
-        minutes = (total_seconds % 3600) // 60
-        seconds = total_seconds % 60
-        time_str = f"{hours:02}:{minutes:02}:{seconds:02}"
-
-        thumb_pil = extract_frame_at_time(video_path, t, thumb_width)
-
-        if thumb_pil:
-            draw_timestamp_on_image(thumb_pil, time_str)
-            thumbnails.append(thumb_pil)
-        else:
-            placeholder = Image.new("RGB", (thumb_width, int(thumb_width * (9/16))), color=(50, 50, 50))
-            draw_timestamp_on_image(placeholder, f"{time_str} (err)")
-            thumbnails.append(placeholder)
-
-    if not thumbnails:
-        print("Warning: No valid frames found. Skipping.")
-        return
-
-    # Calculate grid dimensions
-    grid_width = (cols * thumb_width) + ((cols + 1) * DEFAULT_MARGIN)
-    grid_height = (rows * thumbnails[0].height) + ((rows + 1) * DEFAULT_MARGIN)
-
-    # Create the header to match the grid width
-    header_img = draw_header(info, grid_width)
-
-    # Create the final canvas
-    final_canvas_height = header_img.height + grid_height
-    final_canvas = Image.new("RGB", (grid_width, final_canvas_height), GRID_BG_COLOR)
-
-    # Paste Header
-    final_canvas.paste(header_img, (0, 0))
-
-    # Paste Thumbnails
-    current_y_offset = header_img.height
-
-    for idx, thumb in enumerate(thumbnails):
-        current_col = idx % cols
-        current_row = idx // cols
-
-        x_pos = DEFAULT_MARGIN + (current_col * (thumb_width + DEFAULT_MARGIN))
-        y_pos = current_y_offset + DEFAULT_MARGIN + (current_row * (thumb.height + DEFAULT_MARGIN))
-
-        final_canvas.paste(thumb, (x_pos, y_pos))
-
-    ext = ".jpg" if use_jpg else ".png"
-
-    if output_arg:
-        if os.path.isdir(output_arg):
-            out_base = os.path.join(output_arg, f"{info['filename']}{ext}")
-        else:
-            out_base_name, _ = os.path.splitext(output_arg)
-            out_base = f"{out_base_name}{ext}"
-    else:
-        out_base = os.path.join(os.path.dirname(video_path), f"{info['filename']}{ext}")
-
-    final_output_path = get_unique_filename(out_base, ext)
-
-    if use_jpg:
-        final_canvas.save(final_output_path, quality=95)
-    else:
-        final_canvas.save(final_output_path)
-
-    print(f"Summary saved at: {final_output_path}")
-
-# --- Main Logic ---
 
 def main():
     parser = argparse.ArgumentParser(description="Generate a visual summary contact sheet for video files.")
