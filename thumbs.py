@@ -365,7 +365,7 @@ def process_video_file(video_path, output_arg, cols, rows, thumb_width, skip_at_
 
         final_canvas.paste(thumb, (x_pos, y_pos))
 
-    ext = ".jpg"  else ".png"
+    ext = ".jpg" if use_jpg else ".png"
 
     if output_arg:
         if os.path.isdir(output_arg):
