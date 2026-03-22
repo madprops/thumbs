@@ -13,7 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 # --- Configuration & Constants ---
 DEFAULT_COLUMNS = 4
 DEFAULT_ROWS = 4
-DEFAULT_THUMB_WIDTH = 300
+DEFAULT_THUMB_WIDTH = 500
 DEFAULT_MARGIN = 5
 
 # Updated Font Sizes
