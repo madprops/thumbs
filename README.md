@@ -8,7 +8,7 @@ Now you have `thumbs` available as a program.
 
 You can do `thumbs some_video.mp4`.
 
-Or `thumbs --directoy /some/dir`
+Or `thumbs --directory /some/dir`
 
 ## Manual Install
 
