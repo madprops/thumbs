@@ -312,10 +312,17 @@ def process_video_file(video_path, output_path):
     else:
         stat_h = args.font_size
 
-    if args.no_title:
-        header_height = int(header_padding_y + (3 * (stat_h + line_spacing)) + header_padding_y)
-    else:
-        header_height = int(header_padding_y + title_h + (line_spacing * 2) + (3 * (stat_h + line_spacing)) + header_padding_y)
+    header_height = 0
+    if not args.no_title or not args.no_stats:
+        header_height += header_padding_y
+        if not args.no_title:
+            header_height += title_h
+            if not args.no_stats:
+                header_height += (line_spacing * 2)
+        if not args.no_stats:
+            header_height += (3 * (stat_h + line_spacing))
+        header_height += header_padding_y
+    header_height = int(header_height)
 
     # Calculate Layout Sizes
     sample_time = args.skip_at_start + interval
@@ -334,24 +341,26 @@ def process_video_file(video_path, output_path):
     canvas = Image.new("RGB", (grid_width, full_height), GRID_BG_COLOR)
     draw = ImageDraw.Draw(canvas)
 
-    # Draw Header Background
-    draw.rectangle([0, 0, grid_width, header_height], fill=BG_COLOR)
+    if header_height > 0:
+        # Draw Header Background
+        draw.rectangle([0, 0, grid_width, header_height], fill=BG_COLOR)
 
-    # Draw Metadata Text
-    current_y = header_padding_y
+        # Draw Metadata Text
+        current_y = header_padding_y
 
-    if not args.no_title:
-        draw.text((header_padding_x, current_y), title_text, font=title_font, fill=TEXT_COLOR)
-        current_y += title_h + (line_spacing * 2)
+        if not args.no_title:
+            draw.text((header_padding_x, current_y), title_text, font=title_font, fill=TEXT_COLOR)
+            current_y += title_h + (line_spacing * 2)
 
-    col_w = (grid_width - (2 * header_padding_x)) / 3
+        if not args.no_stats:
+            col_w = (grid_width - (2 * header_padding_x)) / 3
 
-    for i, stat in enumerate(stats):
-        col = i % 3
-        row = i // 3
-        x = header_padding_x + (col * col_w)
-        y = current_y + (row * (stat_h + line_spacing))
-        draw.text((x, int(y)), stat, font=font, fill=TEXT_COLOR)
+            for i, stat in enumerate(stats):
+                col = i % 3
+                row = i // 3
+                x = header_padding_x + (col * col_w)
+                y = current_y + (row * (stat_h + line_spacing))
+                draw.text((x, int(y)), stat, font=font, fill=TEXT_COLOR)
 
     # Process Thumbnails
     for i in range(total_thumbs):
@@ -454,6 +463,7 @@ def main():
     parser.add_argument("--timestamp-font-size", type=int, default=24, help="Font size for thumbnail timestamps. Default: 24")
     parser.add_argument("--font", help="Path to a custom .ttf or .ttc font file to use")
     parser.add_argument("--no-title", action="store_true", help="Disable the title at the top of the summary")
+    parser.add_argument("--no-stats", action="store_true", help="Disable the stats at the top of the generated image")
 
     args = parser.parse_args()
 
