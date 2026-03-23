@@ -6,6 +6,10 @@ Then do `pipx install git+https://github.com/madprops/thumbs --force`
 
 Now you have `thumbs` available as a program.
 
+You can do `thumbs some_video.mp4`.
+
+Or `thumbs --directoy /some/dir`
+
 ## Manual Install
 
 Go to your code directory.
