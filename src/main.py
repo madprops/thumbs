@@ -440,7 +440,7 @@ def main():
 
     parser.add_argument("target", nargs="?", help="A single video file or a directory to process (positional)")
     parser.add_argument("--file", help="Specific single video file to process")
-    parser.add_argument("--directory", help="Directory to scan for video files")
+    parser.add_argument("--directory", nargs="?", const=".", help="Directory to scan for video files. Defaults to current directory if no path is provided.")
     parser.add_argument("--output", help="Output file path, directory, or base name. Appends counter if exists.")
     parser.add_argument("--cols", type=int, default=DEFAULT_COLUMNS, help=f"Number of columns. Default: {DEFAULT_COLUMNS}")
     parser.add_argument("--rows", type=int, default=DEFAULT_ROWS, help=f"Number of rows. Default: {DEFAULT_ROWS}")
@@ -486,7 +486,7 @@ def main():
         else:
             print(f"Error: The file '{abs_file}' does not exist.")
             sys.exit(1)
-    elif (abs_target and os.path.isfile(abs_target)):
+    elif args.target and os.path.isfile(abs_target):
         video_targets.append(abs_target)
     else:
         # Determine directory to scan explicitly
@@ -494,7 +494,7 @@ def main():
 
         if abs_dir:
             scan_dir = abs_dir
-        elif (abs_target and os.path.isdir(abs_target)):
+        elif args.target and os.path.isdir(abs_target):
             scan_dir = abs_target
 
         if scan_dir:
