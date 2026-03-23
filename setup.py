@@ -18,7 +18,7 @@ setup(
     version="1.0.0",
     package_dir={"": "src"},
     packages=[""],
-    package_data={"": ["*.toml", "*.txt", "*.png"]},
+    package_data={"": ["*.toml", "*.txt", "*.png", "*.ttf"]},
     install_requires=requirements,
     entry_points={
         "console_scripts": [
