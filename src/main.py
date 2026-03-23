@@ -20,7 +20,7 @@ DEFAULT_MARGIN = 5
 TEXT_COLOR = (240, 240, 240)         # Off-white text
 BG_COLOR = (30, 30, 30)              # Dark gray for header background
 GRID_BG_COLOR = (15, 15, 15)         # Almost black for the thumbnail grid background
-TIMESTAMP_BG_COLOR = (0, 0, 0, 180)  # Darker semi-transparent black for timestamps
+TIMESTAMP_BG_COLOR = (0, 0, 0)  # Darker semi-transparent black for timestamps
 TIMESTAMP_TEXT_COLOR = (255, 255, 255) # White
 
 VIDEO_EXTENSIONS = (".mp4", ".avi", ".mkv", ".mov", ".flv", ".wmv", ".mpeg", ".webm")
@@ -318,9 +318,9 @@ def process_video_file(video_path, output_path):
         if not args.no_title:
             header_height += title_h
             if not args.no_stats:
-                header_height += (line_spacing * 2)
+                header_height += line_spacing * 2
         if not args.no_stats:
-            header_height += (3 * (stat_h + line_spacing))
+            header_height += 3 * (stat_h + line_spacing)
         header_height += header_padding_y
     header_height = int(header_height)
 
@@ -333,8 +333,8 @@ def process_video_file(video_path, output_path):
         return
 
     thumb_h = sample_thumb.height
-    grid_width = (args.cols * args.thumb_width) + ((args.cols + 1) * margin)
-    grid_height = (args.rows * thumb_h) + ((args.rows + 1) * margin)
+    grid_width = args.cols * args.thumb_width + (args.cols + 1) * margin
+    grid_height = args.rows * thumb_h + (args.rows + 1) * margin
     full_height = header_height + grid_height
 
     # Create Canvas
@@ -350,28 +350,28 @@ def process_video_file(video_path, output_path):
 
         if not args.no_title:
             draw.text((header_padding_x, current_y), title_text, font=title_font, fill=TEXT_COLOR)
-            current_y += title_h + (line_spacing * 2)
+            current_y += title_h + line_spacing * 2
 
         if not args.no_stats:
-            col_w = (grid_width - (2 * header_padding_x)) / 3
+            col_w = (grid_width - 2 * header_padding_x) / 3
 
             for i, stat in enumerate(stats):
                 col = i % 3
                 row = i // 3
-                x = header_padding_x + (col * col_w)
-                y = current_y + (row * (stat_h + line_spacing))
+                x = header_padding_x + col * col_w
+                y = current_y + row * (stat_h + line_spacing)
                 draw.text((x, int(y)), stat, font=font, fill=TEXT_COLOR)
 
     # Process Thumbnails
     for i in range(total_thumbs):
-        time_s = args.skip_at_start + (interval * (i + 1))
+        time_s = args.skip_at_start + interval * (i + 1)
         thumb = extract_frame_at_time(video_path, time_s, args.thumb_width)
 
         if thumb:
             col = i % args.cols
             row = i // args.cols
-            x = (col * args.thumb_width) + ((col + 1) * margin)
-            y = header_height + (row * thumb_h) + ((row + 1) * margin)
+            x = col * args.thumb_width + (col + 1) * margin
+            y = header_height + row * thumb_h + (row + 1) * margin
 
             canvas.paste(thumb, (x, y))
 
@@ -382,20 +382,27 @@ def process_video_file(video_path, output_path):
             if ts_bbox:
                 ts_w = ts_bbox[2] - ts_bbox[0]
                 ts_h = ts_bbox[3] - ts_bbox[1]
+                offset_x = ts_bbox[0]
+                offset_y = ts_bbox[1]
             else:
                 ts_w = args.timestamp_font_size * 4
                 ts_h = args.timestamp_font_size
+                offset_x = 0
+                offset_y = 0
 
             padding = 6
-            ts_x = x + args.thumb_width - ts_w - (padding * 2) - 5
-            ts_y = y + thumb_h - ts_h - (padding * 2) - 5
+            ts_x = x + args.thumb_width - ts_w - padding * 2 - 5
+            ts_y = y + thumb_h - ts_h - padding * 2 - 5
 
             draw.rectangle(
-                [ts_x, ts_y, ts_x + ts_w + (padding * 2), ts_y + ts_h + (padding * 2)],
+                [ts_x, ts_y, ts_x + ts_w + padding * 2, ts_y + ts_h + padding * 2],
                 fill=TIMESTAMP_BG_COLOR
             )
 
-            draw.text((ts_x + padding, ts_y + padding), ts_str, font=ts_font, fill=TIMESTAMP_TEXT_COLOR)
+            text_x = ts_x + padding - offset_x
+            text_y = ts_y + padding - offset_y
+
+            draw.text((text_x, text_y), ts_str, font=ts_font, fill=TIMESTAMP_TEXT_COLOR)
 
     # Apply Image Resizing if provided
     if args.width or args.height:
