@@ -486,30 +486,26 @@ def main():
         else:
             print(f"Error: The file '{abs_file}' does not exist.")
             sys.exit(1)
-    elif abs_target and os.path.isfile(abs_target):
+    elif (abs_target and os.path.isfile(abs_target)):
         video_targets.append(abs_target)
     else:
-        # Determine directory to scan
+        # Determine directory to scan explicitly
+        scan_dir = None
+
         if abs_dir:
             scan_dir = abs_dir
-        elif abs_target and os.path.isdir(abs_target):
+        elif (abs_target and os.path.isdir(abs_target)):
             scan_dir = abs_target
-        else:
-            shell_pwd = os.environ.get('PWD')
 
-            if shell_pwd:
-                scan_dir = shell_pwd
-            else:
-                scan_dir = os.getcwd()
+        if scan_dir:
+            if not os.path.isdir(scan_dir):
+                print(f"Error: The directory '{scan_dir}' does not exist.")
+                sys.exit(1)
 
-        if not os.path.isdir(scan_dir):
-            print(f"Error: The directory '{scan_dir}' does not exist.")
-            sys.exit(1)
-
-        for root, _, files in os.walk(scan_dir):
-            for file in files:
-                if file.lower().endswith(VIDEO_EXTENSIONS):
-                    video_targets.append(os.path.join(root, file))
+            for root, _, files in os.walk(scan_dir):
+                for file in files:
+                    if file.lower().endswith(VIDEO_EXTENSIONS):
+                        video_targets.append(os.path.join(root, file))
 
     if not video_targets:
         print("No video detected. Use --help to see all options")
