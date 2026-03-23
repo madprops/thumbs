@@ -44,22 +44,27 @@ possible_fonts = [
 ]
 
 SELECTED_FONT_PATH = next((f for f in possible_fonts if os.path.exists(f)), None)
+args = None
 
 # --- Helper Functions ---
 
 def resolve_target(target):
     if not target:
         return None
+
     if os.path.isabs(target):
         return os.path.abspath(target)
 
     cwd_path = os.path.abspath(target)
+
     if os.path.exists(cwd_path):
         return cwd_path
 
     shell_pwd = os.environ.get('PWD')
+
     if shell_pwd:
         pwd_path = os.path.abspath(os.path.join(shell_pwd, target))
+
         if os.path.exists(pwd_path):
             return pwd_path
 
@@ -157,6 +162,7 @@ def get_video_info(video_path):
 
         if "/" in fps_str:
             num, den = fps_str.split("/")
+
             if int(den) != 0:
                 fps = round(int(num) / int(den), 3)
             else:
@@ -215,6 +221,7 @@ def extract_frame_at_time(video_path, time_s, target_width):
 
         if process.returncode != 0:
             return None
+
         if not stdout:
             return None
 
@@ -228,11 +235,12 @@ def extract_frame_at_time(video_path, time_s, target_width):
             pil_image = pil_image.resize((target_width, h_size), Image.Resampling.LANCZOS)
         except AttributeError:
             pil_image = pil_image.resize((target_width, h_size), Image.ANTIALIAS)
+
         return pil_image
     except Exception:
         return None
 
-def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at_start, use_jpg, target_width, target_height, font_size, title_font_size, timestamp_font_size, custom_font_path):
+def process_video_file(video_path, output_path):
     margin = DEFAULT_MARGIN
     info = get_video_info(video_path)
 
@@ -243,25 +251,25 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
     print(f"Processing: {info['filename']} ({info['length']})")
 
     # Calculate Grid
-    total_thumbs = cols * rows
+    total_thumbs = args.cols * args.rows
 
-    if info["duration_s"] > skip_at_start:
-        duration = info["duration_s"] - skip_at_start
+    if info["duration_s"] > args.skip_at_start:
+        duration = info["duration_s"] - args.skip_at_start
     else:
         duration = info["duration_s"]
-        skip_at_start = 0
+        args.skip_at_start = 0
 
     interval = duration / (total_thumbs + 1)
 
     # Resolve active font path
-    active_font_path = custom_font_path if custom_font_path else SELECTED_FONT_PATH
+    active_font_path = args.font if args.font else SELECTED_FONT_PATH
 
     # Initialize fonts with fallback warning
     if active_font_path:
         try:
-            font = ImageFont.truetype(active_font_path, font_size)
-            title_font = ImageFont.truetype(active_font_path, title_font_size)
-            ts_font = ImageFont.truetype(active_font_path, timestamp_font_size)
+            font = ImageFont.truetype(active_font_path, args.font_size)
+            title_font = ImageFont.truetype(active_font_path, args.title_font_size)
+            ts_font = ImageFont.truetype(active_font_path, args.timestamp_font_size)
         except Exception as e:
             print(f"Warning: Failed to load font at {active_font_path} ({e}). Falling back to unscalable default font.")
             font = ImageFont.load_default()
@@ -285,34 +293,41 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
     line_spacing = 15
 
     # Calculate Heights
-    title_text = f"File: {info['filename']}"
-    title_bbox = title_font.getbbox(title_text)
+    if not args.no_title:
+        title_text = f"File: {info['filename']}"
+        title_bbox = title_font.getbbox(title_text)
 
-    if title_bbox:
-        title_h = title_bbox[3] - title_bbox[1]
+        if title_bbox:
+            title_h = title_bbox[3] - title_bbox[1]
+        else:
+            title_h = args.title_font_size
     else:
-        title_h = title_font_size
+        title_text = ""
+        title_h = 0
 
     stat_bbox = font.getbbox("Mg")
 
     if stat_bbox:
         stat_h = stat_bbox[3] - stat_bbox[1]
     else:
-        stat_h = font_size
+        stat_h = args.font_size
 
-    header_height = int(header_padding_y + title_h + (line_spacing * 2) + (3 * (stat_h + line_spacing)) + header_padding_y)
+    if args.no_title:
+        header_height = int(header_padding_y + (3 * (stat_h + line_spacing)) + header_padding_y)
+    else:
+        header_height = int(header_padding_y + title_h + (line_spacing * 2) + (3 * (stat_h + line_spacing)) + header_padding_y)
 
     # Calculate Layout Sizes
-    sample_time = skip_at_start + interval
-    sample_thumb = extract_frame_at_time(video_path, sample_time, thumb_width)
+    sample_time = args.skip_at_start + interval
+    sample_thumb = extract_frame_at_time(video_path, sample_time, args.thumb_width)
 
     if not sample_thumb:
         print(f"Error: Could not extract sample frame from {video_path}")
         return
 
     thumb_h = sample_thumb.height
-    grid_width = (cols * thumb_width) + ((cols + 1) * margin)
-    grid_height = (rows * thumb_h) + ((rows + 1) * margin)
+    grid_width = (args.cols * args.thumb_width) + ((args.cols + 1) * margin)
+    grid_height = (args.rows * thumb_h) + ((args.rows + 1) * margin)
     full_height = header_height + grid_height
 
     # Create Canvas
@@ -324,8 +339,10 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
 
     # Draw Metadata Text
     current_y = header_padding_y
-    draw.text((header_padding_x, current_y), title_text, font=title_font, fill=TEXT_COLOR)
-    current_y += title_h + (line_spacing * 2)
+
+    if not args.no_title:
+        draw.text((header_padding_x, current_y), title_text, font=title_font, fill=TEXT_COLOR)
+        current_y += title_h + (line_spacing * 2)
 
     col_w = (grid_width - (2 * header_padding_x)) / 3
 
@@ -338,13 +355,13 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
 
     # Process Thumbnails
     for i in range(total_thumbs):
-        time_s = skip_at_start + (interval * (i + 1))
-        thumb = extract_frame_at_time(video_path, time_s, thumb_width)
+        time_s = args.skip_at_start + (interval * (i + 1))
+        thumb = extract_frame_at_time(video_path, time_s, args.thumb_width)
 
         if thumb:
-            col = i % cols
-            row = i // cols
-            x = (col * thumb_width) + ((col + 1) * margin)
+            col = i % args.cols
+            row = i // args.cols
+            x = (col * args.thumb_width) + ((col + 1) * margin)
             y = header_height + (row * thumb_h) + ((row + 1) * margin)
 
             canvas.paste(thumb, (x, y))
@@ -357,11 +374,11 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
                 ts_w = ts_bbox[2] - ts_bbox[0]
                 ts_h = ts_bbox[3] - ts_bbox[1]
             else:
-                ts_w = timestamp_font_size * 4
-                ts_h = timestamp_font_size
+                ts_w = args.timestamp_font_size * 4
+                ts_h = args.timestamp_font_size
 
             padding = 6
-            ts_x = x + thumb_width - ts_w - (padding * 2) - 5
+            ts_x = x + args.thumb_width - ts_w - (padding * 2) - 5
             ts_y = y + thumb_h - ts_h - (padding * 2) - 5
 
             draw.rectangle(
@@ -372,23 +389,23 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
             draw.text((ts_x + padding, ts_y + padding), ts_str, font=ts_font, fill=TIMESTAMP_TEXT_COLOR)
 
     # Apply Image Resizing if provided
-    if target_width or target_height:
+    if args.width or args.height:
         orig_w, orig_h = canvas.size
 
-        if target_width:
-            new_w = target_width
+        if args.width:
+            new_w = args.width
         else:
             new_w = orig_w
 
-        if target_height:
-            new_h = target_height
+        if args.height:
+            new_h = args.height
         else:
             new_h = orig_h
 
-        if target_width and not target_height:
-            new_h = int(orig_h * (target_width / orig_w))
-        elif target_height and not target_width:
-            new_w = int(orig_w * (target_height / orig_h))
+        if args.width and not args.height:
+            new_h = int(orig_h * (args.width / orig_w))
+        elif args.height and not args.width:
+            new_w = int(orig_w * (args.height / orig_h))
 
         try:
             canvas = canvas.resize((new_w, new_h), Image.Resampling.LANCZOS)
@@ -396,7 +413,7 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
             canvas = canvas.resize((new_w, new_h), Image.ANTIALIAS)
 
     # Save Output
-    if use_jpg:
+    if args.jpg:
         ext = ".jpg"
     else:
         ext = ".png"
@@ -410,7 +427,7 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
         if not output_path.lower().endswith(('.jpg', '.jpeg', '.png')):
             output_path = f"{output_path}{ext}"
 
-    if use_jpg:
+    if args.jpg:
         canvas.save(output_path, "JPEG", quality=90)
     else:
         canvas.save(output_path, "PNG")
@@ -418,6 +435,7 @@ def process_video_file(video_path, output_path, cols, rows, thumb_width, skip_at
     print(f"Saved summary to: {output_path}")
 
 def main():
+    global args
     parser = argparse.ArgumentParser(description="Generate a visual summary contact sheet for video files.")
 
     parser.add_argument("target", nargs="?", help="A single video file or a directory to process (positional)")
@@ -435,6 +453,7 @@ def main():
     parser.add_argument("--title-font-size", type=int, default=32, help="Font size for the title. Default: 32")
     parser.add_argument("--timestamp-font-size", type=int, default=24, help="Font size for thumbnail timestamps. Default: 24")
     parser.add_argument("--font", help="Path to a custom .ttf or .ttc font file to use")
+    parser.add_argument("--no-title", action="store_true", help="Disable the title at the top of the summary")
 
     args = parser.parse_args()
 
@@ -493,25 +512,11 @@ def main():
                     video_targets.append(os.path.join(root, file))
 
     if not video_targets:
-        print("No valid video files found to process.")
+        print("No video detected. Use --help to see all options")
         sys.exit(0)
 
     for video in video_targets:
-        process_video_file(
-            video,
-            abs_out,
-            args.cols,
-            args.rows,
-            args.thumb_width,
-            args.skip_at_start,
-            args.jpg,
-            args.width,
-            args.height,
-            args.font_size,
-            args.title_font_size,
-            args.timestamp_font_size,
-            args.font
-        )
+        process_video_file(video, abs_out)
 
 if __name__ == "__main__":
     main()
